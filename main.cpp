@@ -30,6 +30,7 @@
 
 
 bool is_digits(char* str);
+bool delete_file_on_err(int file_desc, char *file_name);
 
 using namespace  std;
 int main(int argc, char **argv) {
@@ -119,6 +120,7 @@ int main(int argc, char **argv) {
     if (transmit_mode == NULL) {
       cerr << "FLOWERROR: transmit_mode is NULL" << endl;
       cerr << "RECVFAIL" << endl;
+      delete_file_on_err(fd_open_file, file_name);
       continue;
     }
 
@@ -135,7 +137,8 @@ int main(int argc, char **argv) {
     if (buffer_size != sizeof(ack_packet)) {
       perror("TTFTP_ERROR: sendto() of ACK fail: ");
       cerr << "RECVFAIL" << endl;
-      close(fd_open_file);
+//      close(fd_open_file);
+      delete_file_on_err(fd_open_file, file_name);
       continue;
     }
 
@@ -162,7 +165,8 @@ int main(int argc, char **argv) {
                                               &client_address_len)) < 0) {
               perror("TTFTP_ERROR: recvfrom() DATA fail: ");
               cerr << "RECVFAIL" << endl;
-              close(fd_open_file);
+//              close(fd_open_file);
+              delete_file_on_err(fd_open_file, file_name);
             }
 
             uint16_t opcode_new_data = 0;
@@ -173,6 +177,7 @@ int main(int argc, char **argv) {
               data_alert = DATA_ALERT_OPCODE;
               cout << "FLOWERROR: error in opcode DATA" << endl;
               cout << "RECVFAIL" << endl;
+              delete_file_on_err(fd_open_file, file_name);
             }
 
             uint16_t new_data_block_num = 0;
@@ -187,6 +192,7 @@ int main(int argc, char **argv) {
               cout << "FLOWERROR: the block number is not the last one + 1" <<
               endl;
               cout << "RECVFAIL" << endl;
+              delete_file_on_err(fd_open_file, file_name);
             }
 
 
@@ -208,9 +214,10 @@ int main(int argc, char **argv) {
             if (size_buffer != sizeof(ack_packet)) {
               perror("TTFTP_ERROR: sendto() of ACK fail: ");
               cerr << "RECVFAIL" << endl;
-              close(fd_open_file);
-              close(sock_fd);
+//              close(fd_open_file);
+//              close(sock_fd);
 //              return FAILURE;
+              delete_file_on_err(fd_open_file, file_name);
             }
             cout << "OUT:ACK," << (ACK_number - 1) << endl;
             timeout_expired_count++;
@@ -219,26 +226,29 @@ int main(int argc, char **argv) {
           if (select_res < 0) {
             perror("TTFTP_ERROR: select() fail: ");
             cerr << "RECVFAIL" << endl;
-            close(fd_open_file);
-            close(sock_fd);
+//            close(fd_open_file);
+//            close(sock_fd);
+            delete_file_on_err(fd_open_file, file_name);
           }
           if (timeout_expired_count >= FAILURES_AMOUNT) {
-            // FATAL ERROR BAIL OUT
             cerr << "FLOWERROR: re-reception tries over the limit" << endl;
             cerr << "RECVFAIL" << endl;
             data_alert = DATA_ALERT_TIMEOUT_LIMIT;
+            delete_file_on_err(fd_open_file, file_name);
           }
 
         } while (data_alert == DATA_ALERT_TIMEOUT);
-        if (data_alert == DATA_ALERT_TIMEOUT_LIMIT) //  We got something else but DATA
+        if (data_alert == DATA_ALERT_TIMEOUT_LIMIT)
         {
-          close(fd_open_file);
+//          close(fd_open_file);
+          delete_file_on_err(fd_open_file, file_name);
           timeout_expired_count = 0;
           ACK_number = 0;
         }
-        if (data_alert == DATA_ALERT_OPCODE) //  We got something else but DATA
+        if (data_alert == DATA_ALERT_OPCODE)
         {
-          close(fd_open_file);
+//          close(fd_open_file);
+          delete_file_on_err(fd_open_file, file_name);
           timeout_expired_count = 0;
           ACK_number = 0;
         }
@@ -246,7 +256,8 @@ int main(int argc, char **argv) {
         if (data_alert ==
             DATA_ALERT_BLOCK_NUM)
         {
-          close(fd_open_file);
+//          close(fd_open_file);
+          delete_file_on_err(fd_open_file, file_name);
           timeout_expired_count = 0;
           ACK_number = 0;
         }
@@ -262,8 +273,9 @@ int main(int argc, char **argv) {
           perror("TTFTP_ERROR: write() fail: ");
           cerr << "RECVFAIL" << endl;
           free(data);
-          close(fd_open_file);
-          close(sock_fd);
+//          close(fd_open_file);
+//          close(sock_fd);
+          delete_file_on_err(fd_open_file, file_name);
         }
         timeout_expired_count = 0;
         free(data);
@@ -275,14 +287,15 @@ int main(int argc, char **argv) {
         if (size_buffer != sizeof(ack_packet)) {
           perror("TTFTP_ERROR: sendto() of ACK fail: ");
           cerr << "RECVFAIL" << endl;
-          close(fd_open_file);
-          close(sock_fd);
+//          close(fd_open_file);
+//          close(sock_fd);
+          delete_file_on_err(fd_open_file, file_name);
         }
         cout << "OUT:ACK," << ACK_number << endl;
         ACK_number++;
       }
 
-    } while (last_write_size == DATAMAX && data_alert == DATA_ALERT_SUCCESS); // Have blocks left to be read from client (not end of transmission)
+    } while (last_write_size == DATAMAX && data_alert == DATA_ALERT_SUCCESS);
     if(data_alert == DATA_ALERT_SUCCESS) {
       cout << "RECVOK" << endl;
       ACK_number = 0;
@@ -302,4 +315,12 @@ bool is_digits(char* str) {
     i++;
   }
   return retval;
+}
+
+bool delete_file_on_err(int file_desc, char *file_name){
+  close(file_desc);
+  if (!strcmp(file_name, "")){
+    strcpy(file_name, "./file.txt") ;
+  }
+  remove(file_name);
 }
