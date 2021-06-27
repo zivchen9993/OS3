@@ -10,33 +10,34 @@
 #include <sys/time.h>
 #include <algorithm>
 
-#define WAIT_FOR_PACKET_TIMEOUT 3
-#define NUMBER_OF_FAILURES 7
+#define PACKET_TIMEOUT_WAIT 3
+#define FAILURES_AMOUNT 7
 #define ECHOMAX 516
-#define DATA_LENGTH 512
-#define OPCODE_LENGTH 2
-#define DATA_BLOCK_NUM_LENGTH 2
-#define OPCODE_WRQ 2
-#define OPCODE_ACK 4
-#define OPCODE_DATA 3
-#define FAILURE 1
-#define ALERT_DATA_TIMEOUT_LIMIT 4
-#define ALERT_DATA_TIMEOUT 1
-#define ALERT_DATA_OPCODE 2
-#define ALERT_DATA_BLOCK_NUM 3
-#define ALERT_DATA_SUCCESS 0
-#define HEADER_TFTP 4
+#define DATAMAX 512
+#define OPCODE_LEN 2
+#define DATA_BLOCK_NUM_LEN 2
+#define WRQ_OPCODE 2
+#define ACK_OPCODE 4
+#define DATA_OPCODE 3
+#define FAILURE -1
 #define SUCCESS 0
+#define DATA_ALERT_TIMEOUT_LIMIT 4
+#define DATA_ALERT_TIMEOUT 1
+#define DATA_ALERT_OPCODE 2
+#define DATA_ALERT_BLOCK_NUM 3
+#define DATA_ALERT_SUCCESS 0
+#define HEADER_TFTP 4
+
 
 bool is_digits(char* str);
 
 using namespace  std;
 int main(int argc, char **argv) {
-  //TODO: wrong opcode should print only once
+  //TODO: wrong opcode should print only once?
   //// checking there is just one input argument - the port number.
   int retval = SUCCESS;
   if (argc != 2) {
-    cout << "FLOWERROR: Invalid Paramters" << endl; // TODO: maybe check if longer than short int port is int
+    cout << "FLOWERROR: Invalid Paramters" << endl; // TODO: maybe check iflonger than short int port is int?
     retval = FAILURE;
   } else {
     bool is_int = is_digits(argv[1]);
@@ -51,24 +52,24 @@ int main(int argc, char **argv) {
   int port = atoi(argv[1]);
 
   //// declaring the ACK-PACKET struct
-  struct ACK_packet {
+  struct ACK_packets {
     uint16_t Opcode;
     uint16_t Block_Number_being_acknowledged;
   }__attribute__((packed));
 
-  uint16_t  ACK_NUM=0;
+  uint16_t  ACK_number=0;
 
   //// declaring variables for future use
-  int timeoutExpiredCount = 0;
-  char messageBuffer[ECHOMAX] = {0};
-  unsigned int client_address_length;
-  int RecievedMsgSize;
-  int Alert_Data = ALERT_DATA_SUCCESS;
+  int timeout_expired_count = 0;
+  char message_buffer[ECHOMAX] = {0};
+  unsigned int client_address_len;
+  int recieved_msg_size;
+  int data_alert = DATA_ALERT_SUCCESS;
   struct sockaddr_in server_address, client_address;
 
   ////open socket for server
-  int sockfd = socket(AF_INET, SOCK_DGRAM, 0); // GOOD
-  if (sockfd < 0) {
+  int sock_fd = socket(AF_INET, SOCK_DGRAM, 0); // GOOD
+  if (sock_fd < 0) {
     perror("TTFTP_ERROR: socket() fail: ");
     return  FAILURE;
   }
@@ -80,289 +81,268 @@ int main(int argc, char **argv) {
   server_address.sin_port = htons(port);
 
   //// bind the server's socket and port.
-  if (bind(sockfd, (const struct sockaddr *) &server_address, sizeof(server_address)) < 0)
+  if (bind(sock_fd, (const struct sockaddr *) &server_address, sizeof(server_address)) < 0)
   {
     perror("TTFTP_ERROR: bind() fail: ");
-    close(sockfd);
+    close(sock_fd);
 //    return  FAILURE;
   }
 
   //// Running on infinte loop - except in cases of fatal errors.
   for (;;) {
-    client_address_length = sizeof(client_address);
-    if ((RecievedMsgSize = recvfrom(sockfd, messageBuffer, ECHOMAX, 0, (struct sockaddr *) &client_address,
-                                    &client_address_length)) < 0) {
+    client_address_len = sizeof(client_address);
+    if ((recieved_msg_size = recvfrom(sock_fd, message_buffer, ECHOMAX, 0, (struct sockaddr *) &client_address,
+                                      &client_address_len)) < 0) {
       perror("TTFTP_ERROR: recvfrom() fail: ");
       cerr << "RECVFAIL" << endl;
-//      close(sockfd);
-//      return FAILURE;
       continue;
     }
     ////copy the first two bytes of the packet to a variable of 16 bits.
-    uint16_t new_opcode = 0;
-    memcpy(&new_opcode, messageBuffer, OPCODE_LENGTH);
+    uint16_t opcode_new = 0;
+    memcpy(&opcode_new, message_buffer, OPCODE_LEN);
     //// check if the new opcode is like the wrq.
 
-    if (ntohs(new_opcode) != OPCODE_WRQ) {
+    if (ntohs(opcode_new) != WRQ_OPCODE) {
       cerr << "FLOWERROR: opcode mismatch with WRQ opcode" << endl;
       cerr << "RECVFAIL" << endl;
       //// in case it isn't, we are still waiting to wrq packet! return to the beginning of the infinite loop
-//      return FAILURE;
       continue;
     }
 
     ////in case we got a WRQ, we want to check the file_name of the future data,
     //// and to open a file in our server with the same name.
     //// copy (malloc) the file name by strdup
-    char *filename;
+    char *file_name;
     //// taking the string from the third byte
-    filename = strdup(messageBuffer + OPCODE_LENGTH);
-    if (filename == NULL) {
+    file_name = strdup(message_buffer + OPCODE_LEN);
+    if (file_name == NULL) {
       cerr << "FLOWERROR: fileName is Null" << endl;
       cerr << "RECVFAIL" << endl;
-//      free(filename); //// in case there is something there (supposed to be empty)
       continue; //// we are still waiting for good wrq.
     }
 
-    //// open a file according to the filename we just got:
-    int fd_opened_file;
-    fd_opened_file = open(filename, O_RDWR | O_TRUNC | O_CREAT , 0777);
-    if (fd_opened_file < 0) {
+    //// open a file according to the file_name we just got:
+    int fd_open_file;
+    fd_open_file = open(file_name, O_RDWR | O_TRUNC | O_CREAT , 0777);
+    if (fd_open_file < 0) {
       //// in case we cant open a file it means there is a system problem, so we end everything
       perror("TTFTP_ERROR: can't open the new file: ");
       cerr << "RECVFAIL" << endl;
-//      close(sockfd);
-//      free(filename);
-//      return FAILURE;
       continue;
     }
 
     //// The file open successfuly, getting the transmission-mode from the client
-    char *transmission_mode;
-    transmission_mode = strdup(messageBuffer + OPCODE_LENGTH +
-        strlen(filename) + 1); //// taking the string from the end of the filename
-    if (transmission_mode == NULL) {
-      cerr << "FLOWERROR: transmission_mode is NULL" << endl;
+    char *transmit_mode;
+    transmit_mode = strdup(message_buffer + OPCODE_LEN +
+        strlen(file_name) + 1); //// taking the string from the end of the file_name
+    if (transmit_mode == NULL) {
+      cerr << "FLOWERROR: transmit_mode is NULL" << endl;
       cerr << "RECVFAIL" << endl;
-//      free(filename);
-//      free(transmission_mode);//// in case there is something there (supposed to be empty)
-//      close(fd_opened_file);
       continue; //// we are still waiting for good wrq.
     }
 
     //// we got an acceptable WRQ
-    cout << "IN:WRQ," << filename << "," << transmission_mode << endl;
+    cout << "IN:WRQ," << file_name << "," << transmit_mode << endl;
 
     //// from now we dont need the last "mallocs" (we creat a fd for the file)
 
-    free(filename);
-    free(transmission_mode);
+    free(file_name);
+    free(transmit_mode);
 
     //// after receiving WRQ - sending ACK 0
-    struct ACK_packet ackpacket;
-    ackpacket.Block_Number_being_acknowledged = htons(ACK_NUM);
-    ackpacket.Opcode = htons(OPCODE_ACK);
-    ssize_t size_buffer = sendto(sockfd, (void *) (&ackpacket), sizeof(ackpacket), 0,
-                                 (struct sockaddr *) &client_address, client_address_length);
-    if (size_buffer != sizeof(ackpacket)) {
+    struct ACK_packets ack_packet;
+    ack_packet.Block_Number_being_acknowledged = htons(ACK_number);
+    ack_packet.Opcode = htons(ACK_OPCODE);
+    ssize_t buffer_size = sendto(sock_fd, (void *) (&ack_packet), sizeof(ack_packet), 0,
+                                 (struct sockaddr *) &client_address, client_address_len);
+    if (buffer_size != sizeof(ack_packet)) {
       perror("TTFTP_ERROR: sendto() of ACK fail: ");
       cerr << "RECVFAIL" << endl;
-      close(fd_opened_file);
-//      close(sockfd);
-//      return FAILURE;
+      close(fd_open_file);
       continue;
     }
 
     //// when we get here - the ACK was sent
-    cout << "OUT:ACK," << ACK_NUM << endl;
-    ACK_NUM++;
-    int lastWriteSize = 0;
-
+    cout << "OUT:ACK," << ACK_number << endl;
+    ACK_number++;
+    int last_write_size = 0;
         do {
             do {
                 do {
-                    //  Wait WAIT_FOR_PACKET_TIMEOUT to see if something appears
+                    //  Wait PACKET_TIMEOUT_WAIT to see if something appears
                     //       for us at the socket (we are waiting for DATA)
-                    ////reset all the fd bits in the set, make the set of fd we are "listening on" - just sockfd
+                    ////reset all the fd bits in the set, make the set of fd we are "listening on" - just sock_fd
                     //// then we will use the range (nfds) and the set in select.
                     fd_set rfds;
                     FD_ZERO(&rfds);
-                    FD_SET(sockfd, &rfds);
+                    FD_SET(sock_fd, &rfds);
 
           //// set the waiting period
-          struct timeval waiting_time_val;
-          waiting_time_val.tv_sec = WAIT_FOR_PACKET_TIMEOUT;
-          waiting_time_val.tv_usec = 0;
+          struct timeval waiting_time_value;
+                  waiting_time_value.tv_sec = PACKET_TIMEOUT_WAIT;
+                  waiting_time_value.tv_usec = 0;
 
           //// set the status flag
-          Alert_Data = ALERT_DATA_SUCCESS;
+          data_alert = DATA_ALERT_SUCCESS;
 
-          int select_result = select(sockfd + 1, &rfds, NULL, NULL, &waiting_time_val);
-          if (select_result > 0) {
+          int select_res = select(sock_fd + 1, &rfds, NULL, NULL, &waiting_time_value);
+          if (select_res > 0) {
             ////  if there was something at the socket and
             ////       we are here not because of a timeout
             ////  Read the DATA packet from the socket (at
             ////       least we hope this is a DATA packet)
-            if ((RecievedMsgSize = recvfrom(sockfd, messageBuffer, ECHOMAX, 0,
-                                            (struct sockaddr *) &client_address,
-                                            &client_address_length)) < 0) {
+            if ((recieved_msg_size = recvfrom(sock_fd, message_buffer, ECHOMAX, 0,
+                                              (struct sockaddr *) &client_address,
+                                              &client_address_len)) < 0) {
               perror("TTFTP_ERROR: recvfrom() DATA fail: ");
               cerr << "RECVFAIL" << endl;
-              close(fd_opened_file);
-              close(sockfd);
-              return FAILURE;
-
+              close(fd_open_file);
+//              close(sock_fd);
+//              return FAILURE;
             }
 
-            uint16_t new_data_opcode = 0;
+            uint16_t opcode_new_data = 0;
             ////copy the first two bytes to a variable of 16 bits.
-            memcpy(&new_data_opcode, messageBuffer, OPCODE_LENGTH);
+            memcpy(&opcode_new_data, message_buffer, OPCODE_LEN);
 
             //// check if the new opcode is like the wrq.
 
-            if (ntohs(new_data_opcode) != OPCODE_DATA) {
-              Alert_Data = ALERT_DATA_OPCODE;
+            if (ntohs(opcode_new_data) != DATA_OPCODE) {
+              data_alert = DATA_ALERT_OPCODE;
               cout << "FLOWERROR: error in opcode DATA" << endl;
               cout << "RECVFAIL" << endl;
             }
 
-            uint16_t new_data_num_block = 0;
-            memcpy(&new_data_num_block, messageBuffer + OPCODE_LENGTH,
-                   DATA_BLOCK_NUM_LENGTH); //// copy two bytes after opcode
+            uint16_t new_data_block_num = 0;
+            memcpy(&new_data_block_num, message_buffer + OPCODE_LEN,
+                   DATA_BLOCK_NUM_LEN); //// copy two bytes after opcode
 
-            if (ntohs(new_data_num_block) !=
-                ACK_NUM) { //// check if the last ack is equal to the
+            if (ntohs(new_data_block_num) !=
+                ACK_number) { //// check if the last ack is equal to the
               // current block_number
-              Alert_Data = ALERT_DATA_BLOCK_NUM;
+              data_alert = DATA_ALERT_BLOCK_NUM;
 
               cout << "FLOWERROR: the block number is not the last one + 1" <<
               endl;
               cout << "RECVFAIL" << endl;
-//            close(fd_opened_file);
-//            close(sockfd);
-//            return FAILURE;
             }
 
 
-            //// otherwise is keep being ALERT_DATA_SUCCESS
-            if (Alert_Data == ALERT_DATA_SUCCESS) {
+            //// otherwise is keep being DATA_ALERT_SUCCESS
+            if (data_alert == DATA_ALERT_SUCCESS) {
               //// saying we got the DATA
-              cout << "IN:DATA," << ntohs(new_data_num_block) << "," << RecievedMsgSize << endl;
+              cout << "IN:DATA," << ntohs(new_data_block_num) << "," << recieved_msg_size << endl;
             }
 
           }
-          if (select_result == 0)
+          if (select_res == 0)
             //  Time out expired while waiting for data to appear at the socket
           {
             // Send another ACK for the last packet
             //// set the status flag
-            Alert_Data = ALERT_DATA_TIMEOUT;
+            data_alert = DATA_ALERT_TIMEOUT;
             ////initializing a new ACK packet
             cout << "FLOWERROR: Time expired, waiting for another transmission"
             << endl;
-            ackpacket.Block_Number_being_acknowledged = htons(ACK_NUM - 1);
-            ackpacket.Opcode = htons(OPCODE_ACK);
-            ssize_t size_buffer = sendto(sockfd, (void *) (&ackpacket), sizeof(ackpacket), 0,
-                                         (struct sockaddr *) &client_address, client_address_length);
+            ack_packet.Block_Number_being_acknowledged = htons(ACK_number - 1);
+            ack_packet.Opcode = htons(ACK_OPCODE);
+            ssize_t size_buffer = sendto(sock_fd, (void *) (&ack_packet), sizeof(ack_packet), 0,
+                                         (struct sockaddr *) &client_address, client_address_len);
 
-            if (size_buffer != sizeof(ackpacket)) {
+            if (size_buffer != sizeof(ack_packet)) {
               perror("TTFTP_ERROR: sendto() of ACK fail: ");
               cerr << "RECVFAIL" << endl;
-              close(fd_opened_file);
-              close(sockfd);
+              close(fd_open_file);
+              close(sock_fd);
 //              return FAILURE;
             }
             ////The last ACK sent again
-            cout << "OUT:ACK," << (ACK_NUM - 1) << endl;
-
-            timeoutExpiredCount++;
+            cout << "OUT:ACK," << (ACK_number - 1) << endl;
+            timeout_expired_count++;
           }
 
-          if (select_result < 0) {
+          if (select_res < 0) {
             perror("TTFTP_ERROR: select() fail: ");
             cerr << "RECVFAIL" << endl;
-            close(fd_opened_file);
-            close(sockfd);
-//            return FAILURE;
+            close(fd_open_file);
+            close(sock_fd);
           }
           //// we start counting in 0 therefor:
-          if (timeoutExpiredCount >= NUMBER_OF_FAILURES) {
+          if (timeout_expired_count >= FAILURES_AMOUNT) {
             // FATAL ERROR BAIL OUT
             cerr << "FLOWERROR: re-reception tries over the limit" << endl;
             cerr << "RECVFAIL" << endl;
-            Alert_Data = ALERT_DATA_TIMEOUT_LIMIT;
+            data_alert = DATA_ALERT_TIMEOUT_LIMIT;
           }
 
-        } while (Alert_Data == ALERT_DATA_TIMEOUT);
+        } while (data_alert == DATA_ALERT_TIMEOUT);
         // Continue while some socket was ready but recvfrom somehow failed to read the data
         // this text is copied just because it was writen that way in the hw
-        if (Alert_Data == ALERT_DATA_TIMEOUT_LIMIT) //  We got something else but DATA
+        if (data_alert == DATA_ALERT_TIMEOUT_LIMIT) //  We got something else but DATA
           //  FATAL ERROR BAIL OUT
         {
-          close(fd_opened_file);
-          timeoutExpiredCount = 0;
-          ACK_NUM = 0;
+          close(fd_open_file);
+          timeout_expired_count = 0;
+          ACK_number = 0;
         }
-        if (Alert_Data == ALERT_DATA_OPCODE) //  We got something else but DATA
+        if (data_alert == DATA_ALERT_OPCODE) //  We got something else but DATA
           //  FATAL ERROR BAIL OUT
         {
-          close(fd_opened_file);
-          timeoutExpiredCount = 0;
-          ACK_NUM = 0;
+          close(fd_open_file);
+          timeout_expired_count = 0;
+          ACK_number = 0;
         }
 
-        if (Alert_Data ==
-            ALERT_DATA_BLOCK_NUM) // The incoming block number is not what we have
+        if (data_alert ==
+            DATA_ALERT_BLOCK_NUM) // The incoming block number is not what we have
           // expected, i.e. this is a DATA pkt but the block number
           // in DATA was wrong (not last ACK’s block number + 1
         {
           // FATAL ERROR BAIL OUT
-          close(fd_opened_file);
-          timeoutExpiredCount = 0;
-          ACK_NUM = 0;
+          close(fd_open_file);
+          timeout_expired_count = 0;
+          ACK_number = 0;
         }
 
       } while (false);
-      if(Alert_Data == ALERT_DATA_SUCCESS) {
+      if(data_alert == DATA_ALERT_SUCCESS) {
         //// on this step we need to do all the action in case reading the new packet was succeded:
         //// step 1: write the data to our file:
-        int actual_data_size = RecievedMsgSize - 4;
-        char *DATA = new char[DATA_LENGTH];
-        memcpy(DATA, messageBuffer + HEADER_TFTP, actual_data_size);
-        cout << "WRITING:" << actual_data_size << endl;
-        lastWriteSize = write(fd_opened_file, (void *) DATA, actual_data_size);
-        if (lastWriteSize < actual_data_size) {
+        int data_actual_size = recieved_msg_size - 4;
+        char *data = new char[DATAMAX];
+        memcpy(data, message_buffer + HEADER_TFTP, data_actual_size);
+        cout << "WRITING:" << data_actual_size << endl;
+        last_write_size = write(fd_open_file, (void *) data, data_actual_size);
+        if (last_write_size < data_actual_size) {
           perror("TTFTP_ERROR: write() fail: ");
           cerr << "RECVFAIL" << endl;
-          free(DATA);
-          close(fd_opened_file);
-          close(sockfd);
-//          return FAILURE;
+          free(data);
+          close(fd_open_file);
+          close(sock_fd);
         }
-        timeoutExpiredCount = 0;
-        free(DATA);
+        timeout_expired_count = 0;
+        free(data);
 
         //// step 1:  send ACK packet to the client:
-        ackpacket.Block_Number_being_acknowledged = htons(ACK_NUM);
-        ackpacket.Opcode = htons(OPCODE_ACK);
-        ssize_t size_buffer = sendto(sockfd, (void *) (&ackpacket), sizeof(ackpacket), 0,
-                                     (struct sockaddr *) &client_address, client_address_length);
-        if (size_buffer != sizeof(ackpacket)) {
+        ack_packet.Block_Number_being_acknowledged = htons(ACK_number);
+        ack_packet.Opcode = htons(ACK_OPCODE);
+        ssize_t size_buffer = sendto(sock_fd, (void *) (&ack_packet), sizeof(ack_packet), 0,
+                                     (struct sockaddr *) &client_address, client_address_len);
+        if (size_buffer != sizeof(ack_packet)) {
           perror("TTFTP_ERROR: sendto() of ACK fail: ");
           cerr << "RECVFAIL" << endl;
-          close(fd_opened_file);
-          close(sockfd);
-//          return FAILURE;
+          close(fd_open_file);
+          close(sock_fd);
         }
-        cout << "OUT:ACK," << ACK_NUM << endl;
-        ACK_NUM++;
+        cout << "OUT:ACK," << ACK_number << endl;
+        ACK_number++;
       }
 
-    } while (lastWriteSize == DATA_LENGTH && Alert_Data == ALERT_DATA_SUCCESS); // Have blocks left to be read from client (not end of transmission)
-    if(Alert_Data == ALERT_DATA_SUCCESS) {
+    } while (last_write_size == DATAMAX && data_alert == DATA_ALERT_SUCCESS); // Have blocks left to be read from client (not end of transmission)
+    if(data_alert == DATA_ALERT_SUCCESS) {
       cout << "RECVOK" << endl;
-      ACK_NUM = 0;
-      close(fd_opened_file);
+      ACK_number = 0;
+      close(fd_open_file);
     }
   }
   //// this is infinite loop - therefore - unreachable code;
@@ -380,5 +360,4 @@ bool is_digits(char* str) {
     i++;
   }
   return retval;
-//  return std::all_of(str.begin(), str.end(), ::isdigit);
 }
