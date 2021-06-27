@@ -28,20 +28,18 @@
 #define HEADER_TFTP 4
 #define SUCCESS 0
 
+bool is_digits(char* str);
+
 using namespace  std;
-int main(int argc, char **argv) { //TODO: valgrind!!!
+int main(int argc, char **argv) {
   //TODO: wrong opcode should print only once
-  //TODO: ACK_NUM when wait should stay last one received
   //// checking there is just one input argument - the port number.
   int retval = SUCCESS;
   if (argc != 2) {
-    cout << "FLOWERROR: Invalid Paramters" << endl; // TODO: check if int and
-    // maybe if longer than short int
-    // port is int
+    cout << "FLOWERROR: Invalid Paramters" << endl; // TODO: maybe check if longer than short int port is int
     retval = FAILURE;
   } else {
-    std::string str(argv[1]);
-    bool is_int = std::all_of(str.begin(), str.end(), ::isdigit);
+    bool is_int = is_digits(argv[1]);
     if (!is_int) {
       retval = FAILURE;
       cout << "FLOWERROR: Invalid Paramters" << endl;
@@ -50,8 +48,7 @@ int main(int argc, char **argv) { //TODO: valgrind!!!
   if (retval == FAILURE){
     return retval;
   }
-  bool is_fail = false;
-  int port = stoi(argv[1]);
+  int port = atoi(argv[1]);
 
   //// declaring the ACK-PACKET struct
   struct ACK_packet {
@@ -99,7 +96,7 @@ int main(int argc, char **argv) { //TODO: valgrind!!!
       cerr << "RECVFAIL" << endl;
 //      close(sockfd);
 //      return FAILURE;
-//      continue;
+      continue;
     }
     ////copy the first two bytes of the packet to a variable of 16 bits.
     uint16_t new_opcode = 0;
@@ -109,7 +106,7 @@ int main(int argc, char **argv) { //TODO: valgrind!!!
     if (ntohs(new_opcode) != OPCODE_WRQ) {
       cerr << "FLOWERROR: opcode mismatch with WRQ opcode" << endl;
       cerr << "RECVFAIL" << endl;
-      //// in case it isnt, we are still waiting to wrq packet! return to the beggining of the infinite loop
+      //// in case it isn't, we are still waiting to wrq packet! return to the beginning of the infinite loop
 //      return FAILURE;
       continue;
     }
@@ -123,7 +120,7 @@ int main(int argc, char **argv) { //TODO: valgrind!!!
     if (filename == NULL) {
       cerr << "FLOWERROR: fileName is Null" << endl;
       cerr << "RECVFAIL" << endl;
-      free(filename); //// in case there is something there (supposed to be empty)
+//      free(filename); //// in case there is something there (supposed to be empty)
       continue; //// we are still waiting for good wrq.
     }
 
@@ -135,7 +132,7 @@ int main(int argc, char **argv) { //TODO: valgrind!!!
       perror("TTFTP_ERROR: can't open the new file: ");
       cerr << "RECVFAIL" << endl;
 //      close(sockfd);
-      free(filename);
+//      free(filename);
 //      return FAILURE;
       continue;
     }
@@ -147,9 +144,9 @@ int main(int argc, char **argv) { //TODO: valgrind!!!
     if (transmission_mode == NULL) {
       cerr << "FLOWERROR: transmission_mode is NULL" << endl;
       cerr << "RECVFAIL" << endl;
-      free(filename);
-      free(transmission_mode);//// in case there is something there (supposed to be empty)
-      close(fd_opened_file);
+//      free(filename);
+//      free(transmission_mode);//// in case there is something there (supposed to be empty)
+//      close(fd_opened_file);
       continue; //// we are still waiting for good wrq.
     }
 
@@ -176,28 +173,21 @@ int main(int argc, char **argv) { //TODO: valgrind!!!
       continue;
     }
 
-    //// when we get here - the ACK was send
+    //// when we get here - the ACK was sent
     cout << "OUT:ACK," << ACK_NUM << endl;
     ACK_NUM++;
     int lastWriteSize = 0;
 
-    do {
-      is_fail = false;
-      do {
         do {
-
-          //  Wait WAIT_FOR_PACKET_TIMEOUT to see if something appears
-          //       for us at the socket (we are waiting for DATA)
-          ////reset all the fd bits in the set, make the set of fd we are "listening on" - just sockfd
-          //// then we will use the range (nfds) and the set in select.
-
-/////////////// remove sleep!!!!! ////////////////// TODO: remove sleep
-          sleep(1);
-/////////////// remove sleep!!!!! //////////////////
-
-          fd_set rfds;
-          FD_ZERO(&rfds);
-          FD_SET(sockfd, &rfds);
+            do {
+                do {
+                    //  Wait WAIT_FOR_PACKET_TIMEOUT to see if something appears
+                    //       for us at the socket (we are waiting for DATA)
+                    ////reset all the fd bits in the set, make the set of fd we are "listening on" - just sockfd
+                    //// then we will use the range (nfds) and the set in select.
+                    fd_set rfds;
+                    FD_ZERO(&rfds);
+                    FD_SET(sockfd, &rfds);
 
           //// set the waiting period
           struct timeval waiting_time_val;
@@ -217,7 +207,7 @@ int main(int argc, char **argv) { //TODO: valgrind!!!
                                             (struct sockaddr *) &client_address,
                                             &client_address_length)) < 0) {
               perror("TTFTP_ERROR: recvfrom() DATA fail: ");
-              cerr << "AAAAAAAA RECVFAIL" << endl;
+              cerr << "RECVFAIL" << endl;
               close(fd_opened_file);
               close(sockfd);
               return FAILURE;
@@ -247,13 +237,10 @@ int main(int argc, char **argv) { //TODO: valgrind!!!
 
               cout << "FLOWERROR: the block number is not the last one + 1" <<
               endl;
-              cout << "at +1 ACK_NUM = " << ACK_NUM <<endl;
               cout << "RECVFAIL" << endl;
 //            close(fd_opened_file);
 //            close(sockfd);
 //            return FAILURE;
-//              is_fail = true;
-//              break;
             }
 
 
@@ -273,20 +260,11 @@ int main(int argc, char **argv) { //TODO: valgrind!!!
             ////initializing a new ACK packet
             cout << "FLOWERROR: Time expired, waiting for another transmission"
             << endl;
-            cout << ACK_NUM << endl;
-//            ACK_NUM = 3;
             ackpacket.Block_Number_being_acknowledged = htons(ACK_NUM - 1);
             ackpacket.Opcode = htons(OPCODE_ACK);
             ssize_t size_buffer = sendto(sockfd, (void *) (&ackpacket), sizeof(ackpacket), 0,
                                          (struct sockaddr *) &client_address, client_address_length);
-            if (!is_fail) {
-              uint16_t mesg_num = 0;
-              memcpy(&mesg_num, messageBuffer + OPCODE_LENGTH,
-                     DATA_BLOCK_NUM_LENGTH);
-              uint16_t msg_num = (ntohs(mesg_num) + 12);
-              messageBuffer[OPCODE_LENGTH+1] = msg_num;
-              is_fail = true;
-            }
+
             if (size_buffer != sizeof(ackpacket)) {
               perror("TTFTP_ERROR: sendto() of ACK fail: ");
               cerr << "RECVFAIL" << endl;
@@ -295,7 +273,7 @@ int main(int argc, char **argv) { //TODO: valgrind!!!
 //              return FAILURE;
             }
             ////The last ACK sent again
-            cout << "OUT:ACK," << ACK_NUM << endl;
+            cout << "OUT:ACK," << (ACK_NUM - 1) << endl;
 
             timeoutExpiredCount++;
           }
@@ -318,10 +296,6 @@ int main(int argc, char **argv) { //TODO: valgrind!!!
         } while (Alert_Data == ALERT_DATA_TIMEOUT);
         // Continue while some socket was ready but recvfrom somehow failed to read the data
         // this text is copied just because it was writen that way in the hw
-//        if (is_fail) {
-//          is_fail = false;
-//          break;
-//        }
         if (Alert_Data == ALERT_DATA_TIMEOUT_LIMIT) //  We got something else but DATA
           //  FATAL ERROR BAIL OUT
         {
@@ -393,4 +367,18 @@ int main(int argc, char **argv) { //TODO: valgrind!!!
   }
   //// this is infinite loop - therefore - unreachable code;
 
+}
+
+bool is_digits(char* str) {
+  int i = 0;
+  bool retval = true;
+  while (str[i] != '\0'){
+    if ((str[i] < '0') || (str[i] > '9')){
+      retval = false;
+      break;
+    }
+    i++;
+  }
+  return retval;
+//  return std::all_of(str.begin(), str.end(), ::isdigit);
 }
