@@ -30,7 +30,7 @@
 
 
 bool is_digits(char* str);
-bool delete_file_on_err(int file_desc, char *file_name);
+void delete_file_on_err(int file_desc, char *file_name);
 
 using namespace  std;
 int main(int argc, char **argv) {
@@ -317,7 +317,7 @@ bool is_digits(char* str) {
   return retval;
 }
 
-bool delete_file_on_err(int file_desc, char *file_name){
+void delete_file_on_err(int file_desc, char *file_name){
   close(file_desc);
   if (!strcmp(file_name, "")){
     strcpy(file_name, "./file.txt") ;
