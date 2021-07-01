@@ -80,8 +80,9 @@ int main(int argc, char **argv) {
     perror("TTFTP_ERROR: bind() fail: ");
     return FAILURE;
   }
-
+endless_loop:
   for (;;) {
+    ACK_number = 0;
     client_address_len = sizeof(client_address);
     if ((recieved_msg_size = recvfrom(sock_fd, message_buffer, ECHOMAX, 0, (struct sockaddr *) &client_address,
                                       &client_address_len)) < 0) {
@@ -154,9 +155,7 @@ int main(int argc, char **argv) {
     if (buffer_size != sizeof(ack_packet)) {
       perror("TTFTP_ERROR: sendto() of ACK fail: ");
       cerr << "RECVFAIL" << endl;
-      if (!delete_file_on_err(fd_open_file, file_name)){
-        return FAILURE;
-      }
+      delete_file_on_err(fd_open_file, file_name);
       return FAILURE;
     }
 
@@ -183,9 +182,7 @@ int main(int argc, char **argv) {
                                               &client_address_len)) < 0) {
               perror("TTFTP_ERROR: recvfrom() DATA fail: ");
               cerr << "RECVFAIL" << endl;
-              if (!delete_file_on_err(fd_open_file, file_name)){
-                return FAILURE;
-              }
+              delete_file_on_err(fd_open_file, file_name);
               return FAILURE;
             }
 
@@ -200,6 +197,7 @@ int main(int argc, char **argv) {
               if (!delete_file_on_err(fd_open_file, file_name)){
                 return FAILURE;
               }
+              goto endless_loop;
             }
 
             uint16_t new_data_block_num = 0;
@@ -214,6 +212,7 @@ int main(int argc, char **argv) {
               if (!delete_file_on_err(fd_open_file, file_name)){
                 return FAILURE;
               }
+              goto endless_loop;
             }
 
 
@@ -261,9 +260,10 @@ int main(int argc, char **argv) {
             if (!delete_file_on_err(fd_open_file, file_name)){
               return FAILURE;
             }
+            goto endless_loop;
           }
 
-        } while (data_alert == DATA_ALERT_TIMEOUT);
+        } while (data_alert == DATA_ALERT_TIMEOUT); //while #1
         if (data_alert == DATA_ALERT_TIMEOUT_LIMIT)
         {
           if (!delete_file_on_err(fd_open_file, file_name)){
@@ -271,6 +271,7 @@ int main(int argc, char **argv) {
           }
           timeout_expired_count = 0;
           ACK_number = 0;
+          goto endless_loop;
         }
         if (data_alert == DATA_ALERT_OPCODE)
         {
@@ -279,6 +280,7 @@ int main(int argc, char **argv) {
           }
           timeout_expired_count = 0;
           ACK_number = 0;
+          goto endless_loop;
         }
 
         if (data_alert ==
@@ -289,9 +291,10 @@ int main(int argc, char **argv) {
           }
           timeout_expired_count = 0;
           ACK_number = 0;
+          goto endless_loop;
         }
 
-      } while (false);
+      } while (false); //while #2
       if(data_alert == DATA_ALERT_SUCCESS) {
         int data_actual_size = recieved_msg_size - 4;
         char *data = new char[DATAMAX];
@@ -331,12 +334,14 @@ int main(int argc, char **argv) {
           if (!delete_file_on_err(fd_open_file, file_name)){
             return FAILURE;
           }
+          goto endless_loop;
         }
         cout << "OUT:ACK," << ACK_number << endl;
         ACK_number++;
       }
 
     } while (last_write_size == DATAMAX && data_alert == DATA_ALERT_SUCCESS);
+        //while #3
     if(data_alert == DATA_ALERT_SUCCESS) {
       cout << "RECVOK" << endl;
       ACK_number = 0;
@@ -373,3 +378,6 @@ bool delete_file_on_err(int file_desc, char *file_name){
   return true;
 }
 
+void clean_run (){
+
+}
