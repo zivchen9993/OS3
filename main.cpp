@@ -260,6 +260,7 @@ endless_loop:
             if (!delete_file_on_err(fd_open_file, file_name)){
               return FAILURE;
             }
+            timeout_expired_count = 0;
             goto endless_loop;
           }
 
